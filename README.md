@@ -6,7 +6,7 @@ A personal mobile expense tracker (P-Accountant) that syncs to a Supabase databa
 
 ## Setup
 
-### Step 1 — Create a Notion Integration
+### Step 1 — Create a Supabase Integration
 
 1. Go to [Supabase Dashboard](https://supabase.com/dashboard/organizations) and open your workspace.
 2. Click your organization name or create a new organization.
@@ -35,10 +35,29 @@ A personal mobile expense tracker (P-Accountant) that syncs to a Supabase databa
       created_at timestamp with time zone default now(),
       updated_at timestamp with time zone default now()
   );
+  ```
 
+####[Optional - Low Security]
+
+1. On the left navigation, redirect to **Table Editor**
+2. Enable "RLS policies" 
+3. On the left navigation, redirect to **Authentication > Policies > Create Policy > Enable Read Access for all Users**
+4. On the left navigation, redirect to **SQL Editor**
+5. **Paste** the following SQL query and run it to create the **Insert Policy**
+   ```
+   #SQL Query
+   
+   alter policy "Enable insert for anon and authenticated"
+   on "public"."expenses"
+   to public
+   with check (
+     (auth.role() = ANY (ARRAY['anon'::text, 'authenticated'::text]))
+   );
+   
+   ```
 ---
 
-### Step 5 — Configure the App
+### Step 3 — Configure the App
 
 Open the app in your browser. On first launch you'll see a setup screen with these fields:
 
@@ -57,7 +76,7 @@ Transactions are logged automatically by a Google Apps Script that monitors your
 
 The script calls the Supabase directly and applies a `spendly-processed` Gmail label to every thread (Email) it handles so it never double-processes.
 
-### Step 6 — Set Up the Apps Script
+### Step 4 — Set Up the Apps Script
 
 1. Go to [script.google.com](https://script.google.com) → **New project**.
 2. Delete the default `myFunction` code and paste the entire contents of [`Gmail-Supabase.gs`](https://github.com/cleontay/P-Accountant/blob/main/Gmail-Supabase.gs).
@@ -93,7 +112,7 @@ function setConfig() {
 
 ### Category Auto-Detection
 
-The script writes the full display name into the Notion `Category` select field. If no rule matches, it defaults to `Miscellaneous`.
+The script writes the full display name into the Supabase `Category` select field. If no rule matches, it defaults to `Miscellaneous`.
 
 | Supabase cat      | Matched keywords (examples)                              |
 |-------------------|----------------------------------------------------------|
@@ -107,10 +126,38 @@ The script writes the full display name into the Notion `Category` select field.
 | `Investments`     | Syfe, Endowus, StashAway, Tiger Brokers, ETF, CPF invest |
 | `Services`        | Singtel, StarHub, SP Group, insurance                    |
 | `Family`          | school, tuition, childcare, kindergarten                 |
-| `Miscellaneous`   | everything else (edit in Notion or the app afterwards)   |
+| `Miscellaneous`   | everything else (edit in Supabase / app afterwards)      |
 
 ### Pausing or Stopping
 
 Run `removeTrigger()` in the Apps Script editor to stop the automatic sync.
 
 ---
+
+## Credits
+
+This project is a **Supabase-powered rewrite** of an original expense tracker built by [**Jxff-so**](https://github.com/jxff-so/expense-tracker).
+
+**Original Version:** Uses Notion as the backend database  
+**This Version (P-Accountant):** Replaces Notion with Supabase (PostgreSQL) for better performance, real-time sync, and simplified self-hosting.
+
+All UI design, styling, and front-end structure are derived from the original Notion-based project. The backend integration, database schema, RLS policies, and Gmail Apps Script parser have been partially rewritten to work with Supabase.
+
+> 🔗 **Want to use the original Notion version?**  
+> Visit: [**Spendly with Notion**](https://jxff-so.github.io/expense-tracker/)
+
+---
+
+### Key Differences from Original
+
+| Feature | Original (Notion) | This Version (Supabase) |
+|---------|-------------------|-------------------------|
+| Database | Notion API (requires proxy) | Supabase (direct connection) |
+| Setup Complexity | Requires Cloudflare Worker | No proxy needed |
+| Self-hosted | Yes (with Worker) | Yes (direct) |
+| RLS Security | Notion's native permissions | PostgreSQL RLS policies |
+
+---
+
+**Built with:** HTML5, CSS3, JavaScript, Supabase, Google Apps Script  
+**Design inspired by:** [Spendly](https://github.com/jxff-so/expense-tracker)
