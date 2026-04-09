@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Spendly">
+<link rel="apple-touch-icon" href="icon.jpg">
+<link rel="icon" type="image/jpeg" href="icon.jpg">
+<title>Spendly · Supabase</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<!-- Supabase SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#faf7f2;--surface:#f2ece0;--surface2:#ebe3d5;
+  --border:rgba(140,110,70,0.13);--text:#2a1f0f;--muted:#a8947a;
+  --accent:#8b6340;--accent-bg:rgba(139,99,64,0.09);
+  --accent-light:#d4a96a;--danger:#c0392b;
+}
+body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;min-height:100dvh;overflow-x:hidden;padding-bottom:env(safe-area-inset-bottom,20px)}
+.screen{display:none;flex-direction:column;min-height:100dvh}
+.screen.active{display:flex}
+
+/* SETUP */
+#setup{padding:64px 28px 44px;gap:20px;justify-content:center}
+.logo{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--accent);font-weight:700}
+.big-title{font-size:36px;font-weight:800;line-height:1.08}
+.big-title span{color:var(--accent)}
+.sub{font-size:13px;color:var(--muted);line-height:1.65;font-family:'DM Mono',monospace;font-weight:300}
+.field-label{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:6px}
+input, select{width:100%;background:#fff;border:1px solid var(--border);border-radius:14px;padding:14px 16px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;outline:none;transition:border-color .2s;-webkit-appearance:none;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+input:focus, select:focus{border-color:var(--accent-light)}
+input::placeholder{color:var(--muted)}
+.btn{background:var(--accent);color:#faf7f2;border:none;border-radius:14px;padding:16px;font-family:'Syne',sans-serif;font-size:15px;font-weight:800;cursor:pointer;width:100%;transition:transform .15s,opacity .15s}
+.btn:active{transform:scale(.97);opacity:.9}
+.help-link{font-size:12px;color:var(--muted);text-align:center;text-decoration:underline;cursor:pointer;font-family:'DM Mono',monospace}
+
+/* HEADER */
+.header{padding:52px 22px 14px;display:flex;justify-content:space-between;align-items:flex-start;flex-shrink:0}
+.greeting{font-size:22px;color:var(--text);font-family:'Syne',sans-serif;font-weight:800;letter-spacing:-.3px}
+.header-btns{display:flex;gap:8px;align-items:center}
+.icon-btn{width:40px;height:40px;background:#fff;border:1px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;box-shadow:0 1px 3px rgba(0,0,0,.06);transition:background .12s,transform .12s;flex-shrink:0}
+.icon-btn:active{background:var(--surface);transform:scale(.93)}
+.icon-btn.spinning{animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* SYNC STATUS */
+.sync-bar{margin:0 18px 10px;display:flex;align-items:center;gap:6px;font-size:11px;font-family:'DM Mono',monospace;color:var(--muted)}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0}
+.sync-dot.ok{background:#3a7a3a}
+.sync-dot.err{background:var(--danger)}
+.sync-dot.syncing{background:var(--accent-light);animation:pulse .8s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* MONTH CARD */
+.month-card{margin:0 18px 14px;background:var(--accent);border-radius:22px;padding:22px 24px;position:relative;overflow:hidden;flex-shrink:0}
+.month-card::before{content:'';position:absolute;top:-60px;right:-60px;width:180px;height:180px;background:rgba(255,255,255,.06);border-radius:50%;pointer-events:none}
+.month-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.month-lbl{font-size:10px;color:rgba(250,247,242,.6);letter-spacing:.15em;text-transform:uppercase;font-family:'DM Mono',monospace}
+.mnav-btn{background:rgba(255,255,255,.15);border:none;color:#faf7f2;font-size:20px;width:28px;height:28px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;transition:background .12s;padding:0}
+.mnav-btn:active{background:rgba(255,255,255,.28)}
+.mnav-btn:disabled{opacity:.25;cursor:default}
+.month-row{background:#fff;border:1px solid var(--border);border-radius:14px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:background .12s}
+.month-row:active{background:var(--surface)}
+.month-row.current{border-color:var(--accent-light);background:var(--accent-bg)}
+.month-row-label{font-size:14px;font-weight:700}
+.month-row-meta{font-size:12px;font-family:'DM Mono',monospace;color:var(--muted)}
+.month-row-amt{font-size:14px;font-family:'DM Mono',monospace;color:var(--accent);font-weight:700}
+.month-total{font-size:46px;font-weight:800;color:#faf7f2;letter-spacing:-2px;line-height:1}
+.month-cur{font-size:22px;vertical-align:super;letter-spacing:0}
+.month-count{font-size:11px;color:rgba(250,247,242,.6);font-family:'DM Mono',monospace;margin-top:6px}
+
+/* PIE CHART */
+.chart-card{margin:0 18px 14px;background:#fff;border:1px solid var(--border);border-radius:22px;padding:20px;flex-shrink:0;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+.chart-inner{display:flex;align-items:center;gap:18px}
+#pie-canvas{flex-shrink:0}
+.legend{flex:1;display:flex;flex-direction:column;gap:7px;min-width:0}
+.legend-row{display:flex;align-items:center;gap:7px;cursor:pointer;border-radius:8px;padding:2px 4px;transition:background .12s}
+.legend-row:active{background:var(--surface)}
+.legend-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.legend-name{font-size:11px;font-weight:700;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase;letter-spacing:.04em}
+.legend-amt{font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);flex-shrink:0;margin-right:4px}
+.legend-pct{font-size:10px;font-family:'DM Mono',monospace;color:var(--muted);flex-shrink:0;min-width:28px;text-align:right}
+.chart-empty{text-align:center;padding:20px 0;color:var(--muted);font-family:'DM Mono',monospace;font-size:12px}
+
+/* SECTION */
+.section-hdr{padding:0 20px;margin-bottom:10px;font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);font-weight:700;flex-shrink:0}
+
+/* FILTERS */
+.filter-row{display:flex;gap:7px;padding:0 18px;margin-bottom:12px;overflow-x:auto;scrollbar-width:none;flex-shrink:0}
+.filter-row::-webkit-scrollbar{display:none}
+.fpill{flex-shrink:0;background:#fff;border:1px solid var(--border);border-radius:20px;padding:6px 13px;font-size:11px;font-weight:700;color:var(--muted);cursor:pointer;transition:all .12s}
+.fpill.on{background:var(--accent-bg);color:var(--accent);border-color:var(--accent-light)}
+
+/* TXN LIST */
+.txn-list{flex:1;padding:0 18px;display:flex;flex-direction:column;gap:8px;overflow-y:auto}
+.txn{background:#fff;border:1px solid var(--border);border-radius:16px;padding:13px 15px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.txn-ico{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.txn-info{flex:1;min-width:0}
+.txn-name{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.txn-sub{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;margin-top:2px}
+.txn-amt{font-family:'DM Mono',monospace;font-size:14px;font-weight:400;flex-shrink:0}
+.del-btn{background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;padding:4px;opacity:.4;flex-shrink:0}
+.del-btn:active{opacity:1;color:var(--danger)}
+.empty{text-align:center;padding:48px 20px;color:var(--muted);font-family:'DM Mono',monospace;font-size:13px;line-height:1.9}
+.empty .ico{font-size:36px;display:block;margin-bottom:10px}
+
+/* FAB */
+.fab{position:fixed;bottom:calc(24px + env(safe-area-inset-bottom,0px));right:20px;width:58px;height:58px;background:var(--accent);border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:30px;color:#faf7f2;cursor:pointer;box-shadow:0 4px 20px rgba(139,99,64,.3);border:none;font-weight:700;line-height:1}
+.fab:active{transform:scale(.93)}
+
+/* MODAL */
+.overlay{display:none;position:fixed;inset:0;background:rgba(42,31,15,.4);backdrop-filter:blur(6px);z-index:100;align-items:flex-end}
+.overlay.open{display:flex}
+.modal{background:var(--bg);border-radius:28px 28px 0 0;border:1px solid var(--border);border-bottom:none;padding:12px 22px calc(28px + env(safe-area-inset-bottom,0px));width:100%}
+.handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 18px}
+.modal-title{font-size:20px;font-weight:800;margin-bottom:16px}
+.modal-lbl{font-size:10px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;font-weight:700;margin-bottom:6px;display:block}
+.amt-wrap{position:relative;margin-bottom:14px}
+.amt-prefix{position:absolute;left:16px;top:50%;transform:translateY(-50%);font-size:22px;font-weight:800;color:var(--accent-light);font-family:'DM Mono',monospace;pointer-events:none}
+#amt-input{width:100%;background:#fff;border:2px solid var(--accent-light);border-radius:16px;padding:16px 16px 16px 44px;font-family:'DM Mono',monospace;font-size:32px;font-weight:800;color:var(--accent);outline:none;-webkit-appearance:none;letter-spacing:-1px}
+#amt-input:focus{border-color:var(--accent)}
+.cat-grid-modal{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:16px}
+.cbtn{background:#fff;border:1px solid var(--border);border-radius:12px;padding:8px 4px;font-family:'Syne',sans-serif;font-size:9px;font-weight:700;color:var(--muted);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;transition:all .12s;text-transform:uppercase;letter-spacing:.03em;line-height:1.2;text-align:center}
+.cbtn .cico{font-size:18px}
+.cbtn.on{background:var(--accent-bg);color:var(--accent);border-color:var(--accent-light)}
+
+/* GUIDE */
+#guide{padding:56px 22px 40px;gap:16px;overflow-y:auto}
+.gback{font-size:13px;color:var(--accent);cursor:pointer;font-weight:700;margin-bottom:4px}
+.gtitle{font-size:28px;font-weight:800;line-height:1.15;margin-bottom:4px}
+.gstep{background:#fff;border:1px solid var(--border);border-radius:18px;padding:16px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.snum{font-size:9px;letter-spacing:.15em;text-transform:uppercase;color:var(--accent);font-weight:700;font-family:'DM Mono',monospace;margin-bottom:4px}
+.stitle{font-size:14px;font-weight:700;margin-bottom:6px}
+.sdesc{font-size:12px;color:var(--muted);line-height:1.65;font-family:'DM Mono',monospace;font-weight:300}
+.code-box{background:var(--surface);border-radius:10px;padding:10px 13px;margin-top:10px;font-family:'DM Mono',monospace;font-size:11px;color:var(--accent);line-height:1.8;word-break:break-all}
+
+/* TOAST */
+.toast{position:fixed;top:60px;left:50%;transform:translateX(-50%) translateY(-16px);color:#faf7f2;border-radius:12px;padding:9px 18px;font-size:12px;font-family:'DM Mono',monospace;white-space:nowrap;opacity:0;transition:all .3s;z-index:200;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.toast.ok{background:var(--accent)}
+.toast.err{background:var(--danger)}
+</style>
+</head>
+<body>
+
+<!-- SETUP (Supabase) -->
+<div id="setup" class="screen active">
+  <div class="logo">⚡ Spendly · Supabase</div>
+  <div>
+    <div class="big-title">Track every<br><span>dollar.</span></div>
+    <p class="sub" style="margin-top:10px">Connect your Supabase project. All data is synced live in the cloud.</p>
+  </div>
+  <div>
+    <div class="field-label">Your Name</div>
+    <input id="user-name" type="text" placeholder="User" autocomplete="given-name">
+  </div>
+  <div>
+    <div class="field-label">Supabase URL</div>
+    <input id="supabase-url" type="text" placeholder="https://yourproject.supabase.co" autocomplete="off">
+  </div>
+  <div>
+    <div class="field-label">Supabase Publishable Key</div>
+    <input id="supabase-key" type="password" placeholder="eyJhbGciOiJIUzI1NiIs..." autocomplete="off">
+    <p class="sub" style="margin-top:6px">Project Settings → API → Publishable key</p>
+  </div>
+  <div>
+    <div class="field-label">Currency Symbol</div>
+    <input id="cur-sym" type="text" placeholder="$" maxlength="3" style="width:80px">
+  </div>
+  <button class="btn" onclick="initSupabase()">Connect & Start →</button>
+  <div class="help-link" onclick="goGuide()">📘 Supabase setup guide</div>
+</div>
+
+<!-- MAIN -->
+<div id="main" class="screen">
+  <div class="header"><div><div class="greeting" id="greeting">Good morning</div></div><div class="header-btns"><div class="icon-btn" id="refresh-btn" onclick="fetchTxns()">↻</div><div class="icon-btn" onclick="openSettings()">⚙️</div></div></div>
+  <div class="sync-bar"><div class="sync-dot" id="sync-dot"></div><span id="sync-label">Ready</span></div>
+  <div class="month-card" onclick="openMonthPicker()" style="cursor:pointer"><div style="display:flex;justify-content:space-between;margin-bottom:6px"><div class="month-lbl" id="mlbl">This month</div><div style="font-size:11px;color:rgba(250,247,242,.5)">tap to browse ›</div></div><div class="month-total"><span class="month-cur" id="cur-disp">$</span><span id="total">0.00</span></div><div class="month-count" id="txn-count">0 transactions</div></div>
+  <div class="chart-card"><div class="chart-empty" id="chart-empty">Log your first transaction to see the breakdown</div><div class="chart-inner" id="chart-inner" style="display:none"><canvas id="pie-canvas" width="120" height="120"></canvas><div class="legend" id="legend"></div></div></div>
+  <div class="section-hdr">Transactions</div>
+  <div class="filter-row" id="filter-row"></div>
+  <div class="txn-list" id="txn-list"></div>
+  <div style="height:90px;flex-shrink:0"></div>
+  <button class="fab" onclick="openModal()">+</button>
+</div>
+
+<!-- GUIDE -->
+<div id="guide" class="screen"><div class="gback" onclick="go('setup')">← Back to setup</div><div class="gtitle">Supabase Setup</div><div class="gstep"><div class="snum">Step 01 — Create project</div><div class="stitle">supabase.com → New project</div><div class="sdesc">Name it "Spendly" and set a strong database password.</div></div><div class="gstep"><div class="snum">Step 02 — Create expenses table</div><div class="stitle">SQL Editor → Run this:</div><div class="code-box">CREATE TABLE expenses (<br>  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),<br>  name TEXT NOT NULL,<br>  amount DECIMAL(10,2) NOT NULL,<br>  category TEXT NOT NULL,<br>  date TIMESTAMP WITH TIME ZONE DEFAULT NOW()<br>);</div></div><div class="gstep"><div class="snum">Step 03 — Enable RLS & policy</div><div class="stitle">Allow full access (or adjust)</div><div class="code-box">ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;<br>CREATE POLICY "public access" ON expenses FOR ALL USING (true);</div></div><div class="gstep"><div class="snum">Step 04 — Get credentials</div><div class="stitle">Project Settings → API</div><div class="sdesc">Copy your URL and `anon` public key.</div></div><button class="btn" onclick="go('setup')" style="margin-top:4px">← Back to setup</button></div>
+
+<!-- ADD/EDIT MODAL -->
+<div class="overlay" id="overlay"><div class="modal"><div class="handle"></div><div class="modal-title" id="modal-title">New transaction</div><label class="modal-lbl">Amount</label><div class="amt-wrap"><span class="amt-prefix" id="mcur">$</span><input id="amt-input" type="number" inputmode="decimal" placeholder="0.00" min="0" step="0.01"></div><label class="modal-lbl">Description</label><input id="txn-name" type="text" placeholder="e.g. Coffee & croissant" style="margin-bottom:14px"><label class="modal-lbl">Category</label><div class="cat-grid-modal" id="cat-row"></div><button class="btn" id="modal-btn" onclick="submitTxn()">Log transaction →</button><div style="height:8px"></div><div class="help-link" onclick="closeModal()">Cancel</div></div></div>
+
+<!-- MONTH PICKER MODAL -->
+<div class="overlay" id="month-overlay"><div class="modal"><div class="handle"></div><div class="modal-title">Select Month</div><div id="month-picker-list" style="display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow-y:auto;padding-bottom:8px"></div><div class="help-link" onclick="closeMonthPicker()">Cancel</div></div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const CATS=[
+  {id:'food',name:'Food & Drinks',icon:'🍜',hex:'#c0622a'},{id:'shopping',name:'Shopping',icon:'🛍️',hex:'#7a5535'},{id:'travel',name:'Travel',icon:'✈️',hex:'#3a7a6a'},{id:'services',name:'Services',icon:'🔧',hex:'#4a6080'},{id:'entertainment',name:'Entertainment',icon:'🎬',hex:'#7a4a80'},{id:'health',name:'Health',icon:'💊',hex:'#3a7a3a'},{id:'transport',name:'Transport',icon:'🚌',hex:'#6a6a20'},{id:'subscription',name:'Subscriptions',icon:'🔁',hex:'#7a3a5a'},{id:'investments',name:'Investments',icon:'📈',hex:'#2a6a4a'},{id:'family',name:'Family',icon:'🏠',hex:'#8a5a2a'},{id:'misc',name:'Miscellaneous',icon:'📦',hex:'#7a6a50'}
+];
+const SHORT={'Food & Drinks':'Food','Miscellaneous':'Misc','Entertainment':'Entmt','Subscriptions':'Subs','Investments':'Invest'};
+function short(n){return SHORT[n]||n.split(' ')[0]}
+
+let S = { supabaseUrl: '', supabaseKey: '', cur: '$', name: 'User', txns: [], filter: 'all', viewOffset: 0, editId: null, selCat: 'food' };
+let sbClient = null;
+
+function load(){ try{ const d=localStorage.getItem('spendly_sb'); if(d){ const p=JSON.parse(d); S={...S,...p}; } }catch(e){} }
+function save(){ localStorage.setItem('spendly_sb', JSON.stringify({ supabaseUrl:S.supabaseUrl, supabaseKey:S.supabaseKey, cur:S.cur, name:S.name })); }
+
+function go(id){ document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active')); document.getElementById(id).classList.add('active'); }
+function goGuide(){ go('guide'); }
+function openSettings(){ if(confirm('Disconnect Supabase and clear data?')){ localStorage.removeItem('spendly_sb'); S={supabaseUrl:'',supabaseKey:'',cur:'$',name:'User',txns:[],filter:'all',viewOffset:0,editId:null,selCat:'food'}; sbClient=null; go('setup'); } }
+function greetingText(){ const h=new Date().getHours(); const g=h<12?'Good morning':h<17?'Good afternoon':'Good evening'; return S.name?`${g}, ${S.name}`:g; }
+
+async function initSupabase(){
+  const url = document.getElementById('supabase-url').value.trim();
+  const key = document.getElementById('supabase-key').value.trim();
+  const cur = document.getElementById('cur-sym').value.trim() || '$';
+  const name = document.getElementById('user-name').value.trim();
+  if(!url.startsWith('https://')){ toast('Supabase URL must start with https://','err'); return; }
+  if(!key.startsWith('sb_publishable')){ toast('Invalid anon key (should start with sb_publishable)','err'); return; }
+  S.supabaseUrl = url; S.supabaseKey = key; S.cur = cur; S.name = name || 'User';
+  save();
+  try{
+    const { createClient } = supabase;
+    sbClient = createClient(S.supabaseUrl, S.supabaseKey);
+    // test query
+    const { error } = await sbClient.from('expenses').select('id', { count: 'exact', head: true });
+    if(error) throw new Error(error.message);
+    go('main');
+    await fetchTxns();
+    render();
+  }catch(e){ toast(`Connection failed: ${e.message}`, 'err'); sbClient=null; }
+}
+
+async function fetchTxns(){
+  if(!sbClient){ toast('Supabase not connected','err'); return; }
+  setSyncStatus('syncing','Loading...');
+  try{
+    const { data, error } = await sbClient.from('expenses').select('*').order('date', { ascending: false });
+    if(error) throw error;
+    S.txns = data.map(row => ({ id: row.id, name: row.name, amount: Number(row.amount), category: row.category, date: row.date }));
+    save();
+    render();
+    setSyncStatus('ok',`${S.txns.length} entries · live`);
+    toast('Synced from Supabase ✓','ok');
+  }catch(e){ setSyncStatus('err','Sync failed'); toast(e.message,'err'); }
+}
+
+function setSyncStatus(state, label){ const dot=document.getElementById('sync-dot'); const lbl=document.getElementById('sync-label'); const btn=document.getElementById('refresh-btn'); dot.className='sync-dot'+(state?' '+state:''); lbl.textContent=label; btn.classList.toggle('spinning', state==='syncing'); }
+
+function viewDate(){ const now=new Date(); const d=new Date(now.getFullYear(),now.getMonth()+S.viewOffset,1); return{mo:d.getMonth(),yr:d.getFullYear()}; }
+function isCurrentMonth(){ return S.viewOffset===0; }
+
+function render(){
+  document.getElementById('greeting').textContent=greetingText();
+  document.getElementById('cur-disp').textContent=S.cur;
+  document.getElementById('mcur').textContent=S.cur;
+  const{mo,yr}=viewDate();
+  const vDate=new Date(yr,mo,1);
+  document.getElementById('mlbl').textContent=isCurrentMonth()?`This month — ${vDate.toLocaleString('default',{month:'long',year:'numeric'})}`:vDate.toLocaleString('default',{month:'long',year:'numeric'});
+  const mTxns=S.txns.filter(t=>{ const d=new Date(t.date); return d.getMonth()===mo && d.getFullYear()===yr; });
+  const tot=mTxns.reduce((a,t)=>a+t.amount,0);
+  document.getElementById('total').textContent=tot.toFixed(2);
+  document.getElementById('txn-count').textContent=`${mTxns.length} transaction${mTxns.length!==1?'s':''}`;
+  document.querySelector('.fab').style.display=isCurrentMonth()?'flex':'none';
+  renderChart(mTxns);
+  renderList(mTxns);
+  buildFilterPills();
+}
+
+function buildFilterPills(){
+  const container = document.getElementById('filter-row');
+  if(!container) return;
+  container.innerHTML = '<div class="fpill on" data-cat="all">All</div>' + CATS.map(c=>`<div class="fpill" data-cat="${c.id}">${short(c.name)}</div>`).join('');
+  document.querySelectorAll('.fpill').forEach(p=>{
+    p.onclick = ()=>{ S.filter = p.dataset.cat; document.querySelectorAll('.fpill').forEach(f=>f.classList.remove('on')); p.classList.add('on'); render(); };
+  });
+}
+
+function renderChart(mTxns){
+  const total=mTxns.reduce((a,t)=>a+t.amount,0);
+  const ci=document.getElementById('chart-inner'), ce=document.getElementById('chart-empty');
+  if(!total){ ci.style.display='none'; ce.style.display='block'; return; }
+  ci.style.display='flex'; ce.style.display='none';
+  const data=CATS.map(c=>({cat:c, amt:mTxns.filter(t=>t.category===c.id).reduce((a,t)=>a+t.amount,0)})).filter(d=>d.amt>0).sort((a,b)=>b.amt-a.amt);
+  const canvas=document.getElementById('pie-canvas'); const SIZE=120; const dpr=window.devicePixelRatio||1;
+  canvas.width=SIZE*dpr; canvas.height=SIZE*dpr; canvas.style.width=SIZE+'px'; canvas.style.height=SIZE+'px';
+  const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr);
+  const cx=SIZE/2, cy=SIZE/2, r=SIZE/2-2;
+  ctx.clearRect(0,0,SIZE,SIZE);
+  let angle=-Math.PI/2;
+  data.forEach(d=>{ const slice=(d.amt/total)*Math.PI*2; ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,r,angle,angle+slice); ctx.closePath(); ctx.fillStyle=d.cat.hex; ctx.fill(); ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx+r*Math.cos(angle),cy+r*Math.sin(angle)); ctx.strokeStyle='#faf7f2'; ctx.lineWidth=1.5; ctx.stroke(); angle+=slice; });
+  const legend=document.getElementById('legend'); legend.innerHTML='';
+  data.forEach(d=>{ const pct=Math.round((d.amt/total)*100); const row=document.createElement('div'); row.className='legend-row'; row.innerHTML=`<div class="legend-dot" style="background:${d.cat.hex}"></div><div class="legend-name" style="color:${d.cat.hex}">${short(d.cat.name).toUpperCase()}</div><div class="legend-amt">${S.cur}${d.amt.toFixed(0)}</div><div class="legend-pct">${pct}%</div>`; row.onclick=()=>{ S.filter=d.cat.id; document.querySelectorAll('.fpill').forEach(p=>p.classList.remove('on')); const target=Array.from(document.querySelectorAll('.fpill')).find(p=>p.dataset.cat===d.cat.id); if(target)target.classList.add('on'); render(); }; legend.appendChild(row); });
+}
+
+function renderList(mTxns){
+  const l=document.getElementById('txn-list');
+  let txns = [...mTxns].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  if(S.filter!=='all') txns = txns.filter(t=>t.category===S.filter);
+  if(!txns.length){ l.innerHTML=`<div class="empty"><span class="ico">💸</span>No transactions yet.<br>Tap + to log your first one.</div>`; return; }
+  l.innerHTML='';
+  txns.forEach(t=>{
+    const c=CATS.find(x=>x.id===t.category)||CATS[CATS.length-1];
+    const ds=new Date(t.date).toLocaleString('en-SG',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+    const div=document.createElement('div'); div.className='txn'; div.style.cursor='pointer'; div.onclick=()=>openEditModal(t.id);
+    div.innerHTML=`<div class="txn-ico" style="background:${c.hex}18;font-size:20px">${c.icon}</div><div class="txn-info"><div class="txn-name">${t.name||c.name}</div><div class="txn-sub">${c.name} · ${ds}</div></div><div class="txn-amt" style="color:${c.hex}">${S.cur}${t.amount.toFixed(2)}</div><button class="del-btn" onclick="event.stopPropagation();deleteTxn('${t.id}')">✕</button>`;
+    l.appendChild(div);
+  });
+}
+
+async function deleteTxn(id){
+  if(!confirm('Permanently delete?')) return;
+  if(!sbClient){ toast('No connection','err'); return; }
+  const { error } = await sbClient.from('expenses').delete().eq('id', id);
+  if(error){ toast(error.message,'err'); return; }
+  S.txns = S.txns.filter(t=>t.id!==id);
+  render();
+  toast('Deleted ✓','ok');
+}
+
+function buildCatRow(){
+  const r=document.getElementById('cat-row'); r.innerHTML='';
+  CATS.forEach(c=>{ const b=document.createElement('button'); b.className='cbtn'+(c.id===S.selCat?' on':''); b.innerHTML=`<span class="cico">${c.icon}</span>${short(c.name)}`; b.onclick=()=>{ S.selCat=c.id; document.querySelectorAll('.cbtn').forEach(x=>x.classList.remove('on')); b.classList.add('on'); }; r.appendChild(b); });
+}
+function openModal(){ S.editId=null; document.getElementById('modal-title').textContent='New transaction'; document.getElementById('modal-btn').textContent='Log transaction →'; document.getElementById('amt-input').value=''; document.getElementById('txn-name').value=''; buildCatRow(); document.getElementById('overlay').classList.add('open'); setTimeout(()=>document.getElementById('amt-input').focus(),300); }
+function openEditModal(id){ const t=S.txns.find(x=>x.id===id); if(!t)return; S.editId=id; S.selCat=t.category; document.getElementById('modal-title').textContent='Edit transaction'; document.getElementById('modal-btn').textContent='Save changes →'; document.getElementById('amt-input').value=t.amount; document.getElementById('txn-name').value=t.name; buildCatRow(); document.getElementById('overlay').classList.add('open'); }
+function closeModal(){ document.getElementById('overlay').classList.remove('open'); }
+async function submitTxn(){ S.editId ? await updateTxn() : await addTxn(); }
+
+async function addTxn(){
+  const amount=parseFloat(document.getElementById('amt-input').value);
+  if(!amount||amount<=0){ toast('Enter an amount','err'); return; }
+  const name=document.getElementById('txn-name').value.trim()||CATS.find(c=>c.id===S.selCat)?.name||'Expense';
+  if(!sbClient){ toast('Supabase not ready','err'); return; }
+  const { data, error } = await sbClient.from('expenses').insert([{ name, amount, category: S.selCat, date: new Date().toISOString() }]).select();
+  if(error){ toast(error.message,'err'); return; }
+  if(data && data[0]) S.txns.unshift(data[0]);
+  closeModal(); render(); toast('Transaction saved ✓','ok');
+}
+
+async function updateTxn(){
+  const amount=parseFloat(document.getElementById('amt-input').value);
+  if(!amount||amount<=0){ toast('Enter an amount','err'); return; }
+  const name=document.getElementById('txn-name').value.trim()||CATS.find(c=>c.id===S.selCat)?.name||'Expense';
+  if(!sbClient || !S.editId) return;
+  const { error } = await sbClient.from('expenses').update({ name, amount, category: S.selCat }).eq('id', S.editId);
+  if(error){ toast(error.message,'err'); return; }
+  const idx=S.txns.findIndex(t=>t.id===S.editId);
+  if(idx>=0){ S.txns[idx]={...S.txns[idx], name, amount, category:S.selCat }; }
+  closeModal(); render(); toast('Updated ✓','ok');
+}
+
+function openMonthPicker(){
+  const now=new Date(); const rows=[];
+  for(let i=0;i<=18;i++){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); rows.push({offset:-i,date:d}); }
+  const list=document.getElementById('month-picker-list'); list.innerHTML='';
+  rows.forEach(r=>{ const isCur=r.offset===S.viewOffset; const mTxns=S.txns.filter(t=>{const dt=new Date(t.date); return dt.getMonth()===r.date.getMonth() && dt.getFullYear()===r.date.getFullYear();}); const tot=mTxns.reduce((a,t)=>a+t.amount,0); const label=r.offset===0?'This month':r.date.toLocaleString('default',{month:'long',year:'numeric'}); const row=document.createElement('div'); row.className='month-row'+(isCur?' current':''); row.innerHTML=`<div><div class="month-row-label">${label}</div><div class="month-row-meta">${mTxns.length} transaction${mTxns.length!==1?'s':''}</div></div><div class="month-row-amt">${tot>0?S.cur+tot.toFixed(2):'—'}</div>`; row.onclick=()=>{ S.viewOffset=r.offset; closeMonthPicker(); render(); }; list.appendChild(row); });
+  document.getElementById('month-overlay').classList.add('open');
+}
+function closeMonthPicker(){ document.getElementById('month-overlay').classList.remove('open'); }
+
+function toast(msg,type){ const el=document.getElementById('toast'); el.textContent=msg; el.className=`toast show ${type}`; clearTimeout(window.toastTimer); window.toastTimer=setTimeout(()=>el.classList.remove('show'),2800); }
+
+document.getElementById('overlay').addEventListener('click',e=>{if(e.target===document.getElementById('overlay'))closeModal();});
+document.getElementById('month-overlay').addEventListener('click',e=>{if(e.target===document.getElementById('month-overlay'))closeMonthPicker();});
+
+load();
+if(S.supabaseUrl && S.supabaseKey){ 
+  const { createClient } = supabase;
+  sbClient = createClient(S.supabaseUrl, S.supabaseKey);
+  go('main'); 
+  fetchTxns();
+} else { go('setup'); }
+</script>
+</body>
+</html>
