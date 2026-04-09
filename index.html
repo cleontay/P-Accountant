@@ -317,7 +317,6 @@ function renderList(mTxns){
 }
 
 async function deleteTxn(id){
-  console.log(id)
   if(!confirm('Permanently delete?')) return;
   if(!sbClient){ toast('No connection','err'); return; }
   const { error } = await sbClient.from('expenses').delete().eq('id', id);
