@@ -34,8 +34,8 @@ A personal mobile expense tracker (P-Accountant) that syncs to a Supabase databa
   
       created_at timestamp with time zone default now(),
       updated_at timestamp with time zone default now()
-  );
-  ```
+   );
+   ```
 
 ####[Optional - Low Security]
 
