@@ -37,7 +37,7 @@ A personal mobile expense tracker (P-Accountant) that syncs to a Supabase databa
    );
    ```
 
-####[Optional - Low Security]
+[Optional - Low Security]
 
 1. On the left navigation, redirect to **Table Editor**
 2. Enable "RLS policies" 
