@@ -47,10 +47,18 @@ A personal mobile expense tracker (P-Accountant) that syncs to a Supabase databa
    ```
    #SQL Query
    
-   alter policy "Enable insert for anon and authenticated"
+   CREATE POLICY "Enable insert for anon and authenticated"
    on "public"."expenses"
    to public
    with check (
+     (auth.role() = ANY (ARRAY['anon'::text, 'authenticated'::text]))
+   );
+
+   CREATE POLICY "Enable delete for anon and authenticated"
+   ON "public"."expenses"
+   FOR DELETE
+   TO public
+   USING (
      (auth.role() = ANY (ARRAY['anon'::text, 'authenticated'::text]))
    );
    
