@@ -41,7 +41,7 @@ function getConfig() {
 
 const CATEGORY_RULES = [
   { name: 'transport',     pattern: /grab|gojek|taxi|comfort\s*del?gro|citycab|transit|mrt|smrt|sbs|lta|ez.?link|bus\s*inter/i },
-  { name: 'food', pattern: /food|restaurant|cafe|coffee|starbucks|mcdonald|kfc|burger|pizza|sushi|noodle|rice|chicken|fish|bakery|kopitiam|hawker|toast|dim\s*sum|bbq|grill|kitchen|eatery|dine|bistro|canteen|foodcourt/i },
+  { name: 'food', pattern: /food|restaurant|cafe|coffee|starbucks|mcdonald|texas|kfc|burger|pizza|sushi|noodle|rice|chicken|fish|bakery|kopitiam|hawker|toast|dim\s*sum|bbq|grill|kitchen|eatery|dine|bistro|canteen|foodcourt/i },
   { name: 'shopping',      pattern: /shopping|retail|fashion|uniqlo|zara|h&m|h and m|ikea|courts|harvey\s*norman|best\s*denki|lazada|shopee|taobao|amazon|giant|ntuc|fairprice|cold\s*storage|sheng\s*siong|minimart|supermart|market/i },
   { name: 'health',        pattern: /clinic|pharmacy|guardian|watsons|hospital|dental|medical|health|polyclinic|raffles\s*medical|shenton/i },
   { name: 'entertainment', pattern: /cinema|shaw|cathay|golden\s*village|gv\b|movie|entertainment|amusement|attraction|zoo|museum|art|theatre/i },
@@ -58,6 +58,18 @@ function guessCategory(merchant) {
   }
   return 'misc';
 }
+
+// ─────────────────────────────────────────────
+// SG ISO Converter
+// ─────────────────────────────────────────────
+
+function toSingaporeISO(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}T00:00:00.000Z`;
+}
+
 
 // ─────────────────────────────────────────────
 // EMAIL PARSER
@@ -101,7 +113,7 @@ function parsePayLahEmail(body, emailDate) {
     amount,
     merchant,
     category: guessCategory(rawMerchant),
-    date: txnDate.toISOString(),
+    date: toSingaporeISO(txnDate),
     notes: '',
   };
 }
@@ -193,7 +205,7 @@ function parseCitiEmail(body, emailDate) {
     amount,
     merchant,
     category: guessCategory(rawMerchant),
-    date: txnDate.toISOString(),
+    date: toSingaporeISO(txnDate),
     notes: '',
   };
 }
@@ -238,7 +250,7 @@ function parseOCBCEmail(body, emailDate) {
     amount,
     merchant,
     category: guessCategory(rawMerchant),
-    date: txnDate.toISOString(),
+    date: toSingaporeISO(txnDate),
     notes: '',
   };
 }
@@ -292,85 +304,194 @@ function parseUOBEmail(body, emailDate) {
     amount,
     merchant,
     category: guessCategory(merchant),
-    date: txnDate.toISOString(),
+    date: toSingaporeISO(txnDate),
     notes: '',
   };
 }
 
 function parseUOBQREmail(body, emailDate) {
-  let amount = null;
-  let merchant = 'UOB Transaction';
-  let txnDate = emailDate;
+  // Amount — "NETS QR payment of SGD 5.50"
+  const amountMatch = body.match(/NETS QR payment of SGD\s*([\d,]+(?:\.\d{1,2})?)/i);
+  if (!amountMatch) return null;
+  const amount = parseFloat(amountMatch[1].replace(/,/g, ''));
+  if (!amount || amount <= 0) return null;
 
-  // Try NETS QR format first
-  // "You made a NETS QR payment of SGD 3.20 to HUP KEE DELICI"
-  const netsAmountMatch = body.match(/NETS QR payment of SGD\s*([\d,]+(?:\.\d{1,2})?)/i);
-  const netsMerchantMatch = body.match(/to\s+([^.]+?)(?:\s+on\s+your|\s+at\s+|\s*\.|$)/i);
+  // Merchant / Recipient — "to HOCK SENG NOOD"
+  let merchant = 'NETS QR Merchant';
+  const recipientMatch = body.match(/to\s+([^(]+?)(?:\s+on your a\/c|\.)/i);
+  if (recipientMatch) {
+    merchant = cleanMerchantName(recipientMatch[1].trim());
+  }
   
-  if (netsAmountMatch) {
-    // NETS QR format
-    amount = parseFloat(netsAmountMatch[1].replace(/,/g, ''));
-    if (netsMerchantMatch) {
-      merchant = cleanMerchantName(netsMerchantMatch[1].trim());
-    }
-    
-    // Date format in NETS: "at 7:37AM SGT, 08 Apr 26"
-    const dateMatch = body.match(/(\d{1,2}\s+\w{3}\s+\d{2})/i);
-    if (dateMatch) {
-      const parts = dateMatch[1].split(' ');
-      if (parts.length === 3) {
-        const day = parseInt(parts[0], 10);
-        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        const month = monthNames.indexOf(parts[1]);
-        let year = parseInt(parts[2], 10);
-        year = 2000 + year;
-        txnDate = new Date(year, month, day);
-        if (isNaN(txnDate.getTime())) txnDate = emailDate;
-      }
-    }
-  } else {
-    // Try original card transaction format
-    const cardAmountMatch = body.match(/transaction of SGD\s*([\d,]+(?:\.\d{1,2})?)/i);
-    if (cardAmountMatch) {
-      amount = parseFloat(cardAmountMatch[1].replace(/,/g, ''));
-      
-      const merchantMatch = body.match(/at\s+([^.]+?)(?:\.|$)/i);
-      if (merchantMatch) {
-        merchant = cleanMerchantName(merchantMatch[1].trim());
-      }
-      
-      const cardMatch = body.match(/UOB Card ending (\d{4})/i);
-      if (cardMatch && merchant === 'UOB Transaction') {
-        merchant = `UOB Card ${cardMatch[1]}`;
-      }
-      
-      const dateMatch = body.match(/on\s+(\d{2}\/\d{2}\/\d{2})/i);
-      if (dateMatch) {
-        const parts = dateMatch[1].split('/');
-        if (parts.length === 3) {
-          const day = parseInt(parts[0], 10);
-          const month = parseInt(parts[1], 10) - 1;
-          let year = parseInt(parts[2], 10);
-          year = 2000 + year;
-          txnDate = new Date(year, month, day);
-          if (isNaN(txnDate.getTime())) txnDate = emailDate;
-        }
-      }
-    }
+  // Also try to capture account-ending context if recipient not found
+  const accountMatch = body.match(/on your a\/c ending (\d{4})/i);
+  if (accountMatch && merchant === 'NETS QR Merchant') {
+    merchant = `NETS QR A/C ${accountMatch[1]}`;
   }
 
-  // If no amount found, return null
-  if (!amount || amount <= 0) return null;
+  // Date — format "at 11:00AM SGT, 15 Apr 26"
+  let txnDate;
+  const dateMatch = body.match(/at\s+[\d:]+(?:AM|PM)\s+SGT,\s+(\d{1,2}\s+[A-Za-z]+\s+\d{2})/i);
+  if (dateMatch) {
+    // Parse "15 Apr 26" format
+    const dateStr = dateMatch[1];
+    const dateParts = dateStr.match(/(\d{1,2})\s+([A-Za-z]+)\s+(\d{2})/);
+    if (dateParts) {
+      const day = parseInt(dateParts[1], 10);
+      const monthStr = dateParts[2];
+      let year = parseInt(dateParts[3], 10);
+      year = 2000 + year;
+      
+      const monthMap = {
+        'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+        'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+      };
+      const month = monthMap[monthStr];
+      
+      if (month !== undefined) {
+        txnDate = new Date(year, month, day);
+        if (isNaN(txnDate.getTime())) {
+          txnDate = emailDate;
+        }
+      } else {
+        txnDate = emailDate;
+      }
+    } else {
+      txnDate = emailDate;
+    }
+  } else {
+    txnDate = emailDate;
+  }
 
   return {
     amount,
     merchant,
     category: guessCategory(merchant),
-    date: txnDate.toISOString(),
+    date: toSingaporeISO(txnDate),
     notes: '',
   };
 }
 
+function parseUOBPersonalEmail(body, emailDate){
+  // Try to match PayNow transfer first
+  const payNowAmountMatch = body.match(/PayNow transfer of SGD\s*([\d,]+(?:\.\d{1,2})?)/i);
+  
+  let amount;
+  let merchant;
+  let txnDate;
+  
+  if (payNowAmountMatch) {
+    // === PAYNOW TRANSFER PARSING ===
+    amount = parseFloat(payNowAmountMatch[1].replace(/,/g, ''));
+    if (!amount || amount <= 0) return null;
+    
+    // Merchant / Recipient — "to THEBOXCHASETBC PTE. (UEN ending 877C)"
+    merchant = 'PayNow Recipient';
+    const recipientMatch = body.match(/to\s+([^(]+?)(?:\s*\((?:UEN|NRIC\/FIN|Mobile)\s+ending|\.)/i);
+    if (recipientMatch) {
+      merchant = cleanMerchantName(recipientMatch[1].trim());
+    }
+    
+    // Also try to capture account-ending context if recipient not found
+    const accountMatch = body.match(/on your a\/c ending (\d{4})/i);
+    if (accountMatch && merchant === 'PayNow Recipient') {
+      merchant = `PayNow to A/C ${accountMatch[1]}`;
+    }
+    
+    // Date — format "at 11:05AM SGT, 16 Apr 26"
+    const dateMatch = body.match(/at\s+[\d:]+(?:AM|PM)\s+SGT,\s+(\d{1,2}\s+[A-Za-z]+\s+\d{2})/i);
+    if (dateMatch) {
+      const dateStr = dateMatch[1];
+      const dateParts = dateStr.match(/(\d{1,2})\s+([A-Za-z]+)\s+(\d{2})/);
+      if (dateParts) {
+        const day = parseInt(dateParts[1], 10);
+        const monthStr = dateParts[2];
+        let year = parseInt(dateParts[3], 10);
+        year = 2000 + year;
+        
+        const monthMap = {
+          'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+          'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+        };
+        const month = monthMap[monthStr];
+        
+        if (month !== undefined) {
+          txnDate = new Date(year, month, day);
+          if (isNaN(txnDate.getTime())) {
+            txnDate = emailDate;
+          }
+        } else {
+          txnDate = emailDate;
+        }
+      } else {
+        txnDate = emailDate;
+      }
+    } else {
+      txnDate = emailDate;
+    }
+    
+  } else {
+    // === FUNDS TRANSFER PARSING (else branch) ===
+    const fundsAmountMatch = body.match(/made\/scheduled a funds transfer\(s\) of SGD\s*([\d,]+(?:\.\d{1,2})?)/i);
+    if (!fundsAmountMatch) return null;
+    
+    amount = parseFloat(fundsAmountMatch[1].replace(/,/g, ''));
+    if (!amount || amount <= 0) return null;
+    
+    // Merchant / Recipient — "to DBS BANK LTD a/c ending 9664"
+    merchant = 'Funds Transfer Recipient';
+    const recipientMatch = body.match(/to\s+([^(]+?)\s+a\/c ending \d{4}/i);
+    if (recipientMatch) {
+      merchant = cleanMerchantName(recipientMatch[1].trim());
+    }
+    
+    // Fallback: capture from account if recipient not found
+    const fromAccountMatch = body.match(/from your a\/c ending (\d{4})/i);
+    if (fromAccountMatch && merchant === 'Funds Transfer Recipient') {
+      merchant = `Funds Transfer from A/C ${fromAccountMatch[1]}`;
+    }
+    
+    // Date — format "at 3:49PM SGT, 13 Apr 26"
+    const dateMatch = body.match(/at\s+[\d:]+(?:AM|PM)\s+SGT,\s+(\d{1,2}\s+[A-Za-z]+\s+\d{2})/i);
+    if (dateMatch) {
+      const dateStr = dateMatch[1];
+      const dateParts = dateStr.match(/(\d{1,2})\s+([A-Za-z]+)\s+(\d{2})/);
+      if (dateParts) {
+        const day = parseInt(dateParts[1], 10);
+        const monthStr = dateParts[2];
+        let year = parseInt(dateParts[3], 10);
+        year = 2000 + year;
+        
+        const monthMap = {
+          'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+          'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
+        };
+        const month = monthMap[monthStr];
+        
+        if (month !== undefined) {
+          txnDate = new Date(year, month, day);
+          if (isNaN(txnDate.getTime())) {
+            txnDate = emailDate;
+          }
+        } else {
+          txnDate = emailDate;
+        }
+      } else {
+        txnDate = emailDate;
+      }
+    } else {
+      txnDate = emailDate;
+    }
+  }
+  
+  return {
+    amount,
+    merchant,
+    category: guessCategory(merchant),
+    date: toSingaporeISO(txnDate),
+    notes: '',
+  };
+}
 // ─────────────────────────────────────────────
 // MAIN — called by the time trigger
 // ─────────────────────────────────────────────
@@ -389,8 +510,6 @@ function processEmailAlerts() {
   const startDate = PropertiesService.getScriptProperties().getProperty('START_DATE')
     || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy/MM/dd');
 
-  // const startDate = '2026/04/08'
-
   const SOURCES = [
     { query: `from:paylah.alert@dbs.com subject:"Transaction Alerts" -label:spendly-processed after:${startDate}`,                                     parser: parsePayLahEmail },
     { query: `from:ibanking.alert@dbs.com subject:"Card Transaction Alert" -label:spendly-processed after:${startDate}`,                                parser: parsePayLahEmail },
@@ -398,6 +517,7 @@ function processEmailAlerts() {
     { query: `from:notifications@ocbc.com subject:"PayNow transfer made" -label:spendly-processed after:${startDate}`,                                   parser: parseOCBCEmail   },
     { query: `from:unialerts@uobgroup.com subject:"UOB - Transaction Alert" -label:spendly-processed after:${startDate}`,                                   parser: parseUOBEmail   },
     { query: `from:unialerts@uobgroup.com subject:"UOB - NETS QR payment made" -label:spendly-processed after:${startDate}`,                                   parser: parseUOBQREmail   },
+    { query: `from:unialerts@uobgroup.com subject:"UOB Personal Internet Banking Notification Alerts" -label:spendly-processed after:${startDate}`,                                   parser: parseUOBPersonalEmail   },
   ];
 
   let processed = 0;
@@ -422,9 +542,8 @@ function processEmailAlerts() {
         ok ? processed++ : failed++;
 
         console.log(`${ok ? '✓' : '✗'} ${txn.merchant} — SGD ${txn.amount.toFixed(2)} [${txn.category}]`);
+        thread.addLabel(label);
       }
-
-      thread.addLabel(label);
     }
   }
 
